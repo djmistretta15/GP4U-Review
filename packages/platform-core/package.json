@@ -1,0 +1,21 @@
+{
+  "name": "@gp4u/platform-core",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@gp4u/types": "workspace:*",
+    "@gp4u/event-bus": "workspace:*",
+    "@gp4u/db-adapters": "workspace:*",
+    "@gp4u/chamber-registry": "workspace:*",
+    "@prisma/client": "^5.22.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

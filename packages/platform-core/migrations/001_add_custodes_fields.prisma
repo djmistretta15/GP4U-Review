@@ -1,0 +1,117 @@
+// Migration: 001_add_custodes_fields
+//
+// Adds all columns required by Custodes pillars onto the existing GP4U schema.
+// Apply by adding these fields to your apps/web/prisma/schema.prisma.
+//
+// Run: npx prisma migrate dev --name add_custodes_fields
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ADD to model User:
+//
+//   subject_type      String   @default("HUMAN")
+//   clearance_level   Int      @default(0)   // 0=EMAIL_ONLY 1=INSTITUTIONAL 2=ENTERPRISE 3=ADMIN
+//   trust_score       Float    @default(0)
+//   is_banned         Boolean  @default(false)
+//   ban_reason        String?
+//   identity_provider String   @default("EMAIL_PASSWORD")
+//   auth_events       AuthEvent[]
+
+// ADD to model GPU:
+//
+//   supply_tier       String   @default("EDGE")  // BACKBONE | CAMPUS | EDGE
+//   node_id           String?                    // Atlas node this GPU belongs to
+//   vram_available_gb Int?                       // Real-time available VRAM
+//   trust_score       Float    @default(0)
+//   veritas_verified  Boolean  @default(false)
+//   benchmark_score   Int?
+//   allowed_workload_types String @default("TRAINING,INFERENCE")
+//   price_mode        String   @default("FIXED")  // FIXED | SPOT | AUCTION
+//   power_cap_watts   Int?
+
+// NEW model AuthEvent:
+//
+// model AuthEvent {
+//   id           String   @id @default(cuid())
+//   event_type   String
+//   subject_id   String
+//   passport_id  String?
+//   ip_address   String?
+//   metadata     Json?
+//   timestamp    DateTime @default(now())
+//   user         User     @relation(fields: [subject_id], references: [id])
+//   @@index([subject_id])
+//   @@index([event_type])
+// }
+
+// NEW model LedgerEntry (Obsidian immutable chain):
+//
+// model LedgerEntry {
+//   id              String   @id @default(cuid())
+//   entry_id        String   @unique
+//   block_index     Int      @unique
+//   event_type      String
+//   severity        String
+//   subject_id      String?
+//   passport_id     String?
+//   institution_id  String?
+//   target_id       String?
+//   target_type     String?
+//   metadata        Json?
+//   ip_address_hash String?
+//   region          String?
+//   timestamp       DateTime
+//   sequence        Int
+//   prev_hash       String
+//   payload_hash    String
+//   block_hash      String
+//   merkle_root     String?
+//   created_at      DateTime @default(now())
+//   @@index([event_type])
+//   @@index([subject_id])
+//   @@index([target_id])
+//   @@index([block_index])
+// }
+
+// NEW model MerkleBlock (Obsidian sealed blocks):
+//
+// model MerkleBlock {
+//   id           String   @id @default(cuid())
+//   block_number Int      @unique
+//   merkle_root  String
+//   entry_count  Int
+//   first_index  Int
+//   last_index   Int
+//   sealed_at    DateTime
+//   signature    String
+//   sealed_by    String
+// }
+
+// NEW model Dispute (Obsidian dispute resolution):
+//
+// model Dispute {
+//   id                 String    @id @default(cuid())
+//   dispute_id         String    @unique
+//   job_id             String
+//   opened_by          String
+//   against            String
+//   reason             String
+//   status             String    @default("OPEN")
+//   outcome            String?
+//   resolved_by        String?
+//   resolution_notes   String?
+//   refund_amount      Decimal?  @db.Decimal(10,2)
+//   evidence_entry_ids Json
+//   opened_at          DateTime  @default(now())
+//   resolved_at        DateTime?
+//   @@index([job_id])
+//   @@index([status])
+// }
+
+// ADD to model Job:
+//
+//   allocation_id     String?   // Atlas allocation that backed this job
+//   supply_tier       String?   // Which tier the GPU came from
+//   routing_score     Float?    // Atlas match score
+//   actual_cost       Decimal?  @db.Decimal(10,4)  // vs estimate
+//   energy_kwh        Float?    // From Russian-Doll agent
+//   carbon_kg_co2e    Float?    // Energy chamber calc
