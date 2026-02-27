@@ -1,0 +1,26 @@
+{
+  "name": "@custodes/atlas",
+  "version": "1.0.0",
+  "description": "Custodes Atlas — Resource Discovery, Registry & Intelligent Routing",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "jest"
+  },
+  "dependencies": {
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/uuid": "^9.0.7",
+    "typescript": "^5.3.3",
+    "jest": "^29.7.0",
+    "@types/jest": "^29.5.11"
+  },
+  "peerDependencies": {
+    "@custodes/dextera": "^1.0.0",
+    "@custodes/obsidian": "^1.0.0",
+    "@custodes/aedituus": "^1.0.0"
+  }
+}

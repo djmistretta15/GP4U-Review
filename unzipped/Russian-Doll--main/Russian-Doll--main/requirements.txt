@@ -1,0 +1,29 @@
+# Virtual Chip - Python Dependencies
+# Pinned versions for full reproducibility
+
+# Core scientific computing
+numpy==1.24.3
+scipy==1.10.1
+pandas==2.0.2
+
+# Configuration and serialization
+pyyaml==6.0.1
+
+# Testing
+pytest==7.3.1
+pytest-cov==4.1.0
+
+# Visualization (optional but recommended)
+matplotlib==3.7.1
+seaborn==0.12.2
+
+# Documentation
+markdown==3.4.3
+
+# Type checking (dev)
+mypy==1.3.0
+
+# Code quality (dev)
+black==23.3.0
+flake8==6.0.0
+isort==5.12.0

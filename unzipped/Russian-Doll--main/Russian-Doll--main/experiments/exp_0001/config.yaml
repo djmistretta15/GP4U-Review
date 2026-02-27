@@ -1,0 +1,43 @@
+# Experiment 0001 Configuration
+# Virtual Chip Scaling Efficiency Study
+
+experiment:
+  id: "exp_0001"
+  name: "Virtual Chip Scaling Efficiency"
+  description: "Measure energy efficiency scaling with cores and nesting depth"
+  deterministic_seed: 42
+
+independent_variables:
+  num_cores: [2, 4, 8]
+  nesting_depth: [0, 1, 2, 3]
+  scheduling_policy: ["ROUND_ROBIN", "LOAD_BALANCED"]
+
+dependent_variables:
+  - energy_efficiency_ops_per_joule
+  - throughput_tasks_per_second
+  - total_energy_nj
+  - avg_latency_per_task_ns
+  - transistor_count
+
+control_variables:
+  register_width: 8
+  registers_per_core: 8
+  task_type: "ADD"
+  num_tasks_per_run: 100
+  transistor_config:
+    propagation_delay_ps: 1.0
+    switching_energy_fj: 1.0
+    noise_factor: 0.0
+
+repetitions: 10
+
+statistical_analysis:
+  confidence_level: 0.95
+  use_bootstrap: true
+  bootstrap_samples: 10000
+
+output:
+  results_file: "results.json"
+  report_file: "report.md"
+  plots_dir: "plots"
+  raw_data_file: "raw_data.csv"

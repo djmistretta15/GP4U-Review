@@ -1,0 +1,105 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Provider {
+  AWS
+  GCP
+  AZURE
+  LAMBDA
+  RUNPOD
+  OTHER
+}
+
+enum GPUStatus {
+  AVAILABLE
+  BUSY
+  LIMITED
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  COMPLETE
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  jobs      Job[]
+}
+
+model GPU {
+  id           String    @id @default(cuid())
+  name         String
+  provider     Provider
+  vramGB       Int
+  pricePerHour Decimal   @db.Decimal(10, 4)
+  region       String
+  status       GPUStatus @default(AVAILABLE)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  health       GPUHealth?
+  jobs         Job[]
+}
+
+model GPUHealth {
+  id                String   @id @default(cuid())
+  gpuId             String   @unique
+  thermalScore      Int      // 0-100
+  memoryScore       Int      // 0-100
+  uptimeHours       Int
+  lastMaintenanceAt DateTime
+  pastUsageTags     String   // Comma-separated: TRAINING,INFERENCE,IDLE
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  gpu               GPU      @relation(fields: [gpuId], references: [id], onDelete: Cascade)
+}
+
+model Job {
+  id                    String    @id @default(cuid())
+  userId                String
+  gpuId                 String
+  name                  String
+  status                JobStatus @default(PENDING)
+  expectedDurationHours Decimal   @db.Decimal(10, 2)
+  costEstimate          Decimal   @db.Decimal(10, 2)
+  scriptPath            String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gpu                   GPU       @relation(fields: [gpuId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([gpuId])
+  @@index([status])
+}
+
+model ArbitrageSnapshot {
+  id           String   @id @default(cuid())
+  gpuType      String
+  numGpus      Int
+  durationHours Decimal  @db.Decimal(10, 2)
+  provider     Provider
+  pricePerHour Decimal  @db.Decimal(10, 4)
+  totalCost    Decimal  @db.Decimal(10, 2)
+  createdAt    DateTime @default(now())
+
+  @@index([gpuType])
+  @@index([provider])
+}
