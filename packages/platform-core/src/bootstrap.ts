@@ -7,12 +7,12 @@
  * Order of operations:
  *   1. Initialize DB adapters (Prisma connections)
  *   2. Start the event bus
- *   3. Wire Obsidian as the universal event logger (it subscribes to everything)
- *   4. Dock any pre-configured chambers in PASSIVE mode
+ *   3. Wire Obsidian as the universal event logger (subscribes to everything)
+ *   4. Dock chambers in PASSIVE mode
  *   5. Start registry health checks
  *
- * Everything is modular — you can comment out any step and the rest
- * of the platform keeps running. This is the master bulkhead control.
+ * Everything is modular — comment out any step and the rest keeps running.
+ * This is the master bulkhead control panel.
  */
 
 import { PrismaClient } from '@prisma/client'
@@ -24,6 +24,13 @@ import {
   MemoryRevocationStore,
   MemorySequenceCounter,
 } from '@gp4u/db-adapters'
+import { startObsidianSubscriber } from './obsidian-subscriber'
+import { MnemoChamber }        from 'chamber.mnemo'
+import { AetherionChamber }    from 'chamber.aetherion'
+import { OuterimChamber }      from 'chamber.outerim'
+import { EnergyBrokerChamber } from 'chamber.energy'
+import { VeritasChamber }      from 'chamber.veritas'
+import { MistChamber }         from 'chamber.mist'
 
 export interface PlatformServices {
   prisma: PrismaClient
@@ -47,54 +54,52 @@ export async function bootstrapPlatform(): Promise<PlatformServices> {
 
   // ── 1. Database ─────────────────────────────────────────────────────────────
   const prisma = new PrismaClient()
-
-  const subjectStore = new PrismaSubjectStore(prisma)
-  const ledgerStore = new PrismaLedgerStore(prisma)
+  const subjectStore    = new PrismaSubjectStore(prisma)
+  const ledgerStore     = new PrismaLedgerStore(prisma)
   const revocationStore = new MemoryRevocationStore()
   const sequenceCounter = new MemorySequenceCounter()
 
   _services = { prisma, subjectStore, ledgerStore, revocationStore, sequenceCounter }
+  console.log('[platform] DB adapters ready')
 
   // ── 2. Event Bus ────────────────────────────────────────────────────────────
   const bus = getEventBus()
   console.log('[platform] Event bus ready')
 
-  // ── 3. Obsidian universal logger ────────────────────────────────────────────
-  // Obsidian subscribes to ALL events and writes them to the immutable ledger.
-  // This is what fills the chamber telemetry store and enables backtesting.
-  // Note: full Obsidian integration wires ObsidianLedgerService here.
-  // For now the ledger store is ready to receive entries from that service.
-  console.log('[platform] Obsidian ledger store ready — awaiting full Custodes wiring')
+  // ── 3. Obsidian — universal immutable logger ─────────────────────────────────
+  // Every event that flows through the bus gets a permanent ledger entry.
+  // This is what chambers read during backtesting. Never skip this step.
+  startObsidianSubscriber({ ledgerStore, sequenceCounter })
 
   // ── 4. Chamber Registry ─────────────────────────────────────────────────────
   const registry = getChamberRegistry({
-    backtest_threshold: 70,
+    backtest_threshold:           70,   // Score required to go ACTIVE
     health_check_interval_seconds: 60,
+    max_influence_ttl_seconds:    300,
   })
 
-  // Chambers are docked here as you build them.
-  // Uncomment each line when the chamber package exists:
-  //
-  // import { AetherionChamber } from 'chamber.aetherion'
-  // registry.dock(new AetherionChamber())
-  //
-  // import { MnemoChamber } from 'chamber.mnemo'
-  // registry.dock(new MnemoChamber())
-  //
-  // Each chamber starts in PASSIVE mode automatically.
-  // Call registry.runBacktestAndActivate(id, from, to) on a cron
-  // once the chamber reports enough events.
+  // ── Dock chambers in PASSIVE mode ───────────────────────────────────────────
+  // Each starts silent — observing, recording, never influencing routing.
+  // To activate: registry.runBacktestAndActivate('mnemo', fromDate, toDate)
+  // To undock:   registry.undock('mnemo')
+
+  // All 6 chambers dock in PASSIVE mode on startup.
+  // They observe silently until runBacktestAndActivate() promotes them.
+  registry.dock(new MnemoChamber())
+  registry.dock(new AetherionChamber())
+  registry.dock(new OuterimChamber())
+  registry.dock(new EnergyBrokerChamber())
+  registry.dock(new VeritasChamber())
+  registry.dock(new MistChamber())
 
   registry.startHealthChecks()
-  console.log('[platform] Chamber registry started — 0 chambers docked (add chambers above)')
 
-  // ── 5. Instrument the arbitrage API to emit events ──────────────────────────
-  // The arbitrage route should call publishArbitrageCalculated() after each
-  // comparison. That single event fills Mist, Energy, and Aetherion simultaneously.
-  // See apps/web/app/api/arbitrage/route.ts for the wiring point.
+  const docked = registry.getDockedChamberIds()
+  console.log(`[platform] Chamber registry started — ${docked.length} chamber(s) docked: [${docked.join(', ')}]`)
 
+  // ── 5. Summary ───────────────────────────────────────────────────────────────
   console.log('[platform] GP4U platform bootstrap complete')
-  console.log(`[platform] Event bus stats: ${JSON.stringify(bus.getStats())}`)
+  console.log(`[platform] Bus stats: ${JSON.stringify(bus.getStats())}`)
 
   return _services
 }
