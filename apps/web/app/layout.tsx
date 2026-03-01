@@ -37,6 +37,7 @@ const NAV_ITEMS = [
   { href: '/arbitrage', label: 'Arbitrage',   icon: ArbitrageIcon,  description: 'Compare GPU prices' },
   { href: '/memory',    label: 'Memory',       icon: MemoryIcon,     description: 'Stake VRAM for yield' },
   { href: '/clusters',  label: 'Clusters',     icon: ClustersIcon,   description: 'Multi-GPU reservations' },
+  { href: '/billing',   label: 'Billing',      icon: BillingIcon,    description: 'Credits & payments' },
   { href: '/admin',     label: 'Admin',        icon: AdminIcon,      description: 'Chambers & ledger' },
 ] as const
 
@@ -264,6 +265,15 @@ function AdminIcon({ className = '' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
       <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+    </svg>
+  )
+}
+
+function BillingIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+      <line x1="1" y1="10" x2="23" y2="10"/>
     </svg>
   )
 }
