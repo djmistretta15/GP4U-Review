@@ -157,9 +157,11 @@ export function evaluateThreats(signals: TutelaRuntimeSignals): ThreatEvalResult
   }
 
   // ── VRAM ──────────────────────────────────────────────────────────────────
+  // Trigger at >100% — a job using more VRAM than it was allocated is always
+  // suspicious regardless of magnitude. 120% gave bad actors a free 20% buffer.
   if (signals.vram_allocated_gb > 0) {
     const vram_over = (signals.vram_used_gb / signals.vram_allocated_gb) * 100
-    if (vram_over > 120) {
+    if (vram_over > 100) {
       anomalies.push('VRAM_OVERCLAIM')
       max_severity = Math.max(max_severity, 2) as typeof max_severity
     }

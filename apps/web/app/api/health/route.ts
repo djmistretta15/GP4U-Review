@@ -1,16 +1,22 @@
 /**
- * /api/health — Platform Health Check
+ * GET /api/health — Detailed Platform Health Check (authenticated)
  *
- * Returns status of every docked chamber + event bus stats.
- * Used by monitoring, load balancers, and the admin dashboard.
- * This route is in OPEN_ROUTES — no auth required.
+ * Returns full chamber status, event bus stats, and internal topology.
+ * Used by monitoring dashboards and the admin UI.
+ *
+ * This route REQUIRES authentication (not in OPEN_ROUTES).
+ * For an unauthenticated liveness probe see GET /api/health/public.
  */
 
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getEventBus } from '@gp4u/event-bus'
 import { getChamberRegistry } from '@gp4u/chamber-registry'
+import { requireAuth } from '@/lib/auth-guard'
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const auth = await requireAuth(req)
+  if (!auth.ok) return auth.response
+
   try {
     const bus = getEventBus()
     const registry = getChamberRegistry()
@@ -32,10 +38,7 @@ export async function GET() {
     }, {
       status: all_healthy ? 200 : 207,
     })
-  } catch (error) {
-    return NextResponse.json({
-      status: 'error',
-      error:  error instanceof Error ? error.message : 'Unknown error',
-    }, { status: 500 })
+  } catch {
+    return NextResponse.json({ error: 'Health check failed' }, { status: 500 })
   }
 }

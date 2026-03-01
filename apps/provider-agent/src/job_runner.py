@@ -82,11 +82,18 @@ class JobRunner:
         """
         log.info(f"[runner] Starting job {self.manifest.job_id}")
 
+        # Verify image digest before doing anything else — fail fast
+        verified_image_ref = self._pull_and_verify_image()
+
         with tempfile.TemporaryDirectory(prefix="gp4u-job-") as workdir:
+            # Restrict temp dir to owner only — prevents other local users from
+            # reading job inputs/outputs while the job is running
+            os.chmod(workdir, 0o700)
+
             input_dir  = Path(workdir) / "input"
             output_dir = Path(workdir) / "output"
-            input_dir.mkdir()
-            output_dir.mkdir()
+            input_dir.mkdir(mode=0o700)
+            output_dir.mkdir(mode=0o700)
 
             # 1. Download input data
             if self.manifest.input_data_url:
@@ -114,8 +121,8 @@ class JobRunner:
             )
             watchdog_thread.start()
 
-            # 4. Run container
-            exit_code, logs = self._run_container(input_dir, output_dir, workdir)
+            # 4. Run container (use verified digest reference — not the mutable tag)
+            exit_code, logs = self._run_container(input_dir, output_dir, workdir, verified_image_ref)
 
             # 5. Stop watchdog
             self._kill_requested = True
@@ -137,11 +144,44 @@ class JobRunner:
                 "logs":       logs[-5000:],  # Last 5KB of container logs
             }
 
+    def _pull_and_verify_image(self) -> str:
+        """
+        Pull the Docker image and verify its SHA256 digest against the manifest.
+        Returns the immutable image reference (image@sha256:...) for use in docker run.
+        Raises RuntimeError if the digest is missing, malformed, or doesn't match.
+        """
+        expected_sha = str(self.manifest.docker_image_sha256).lower().strip()
+        if not expected_sha or not expected_sha.startswith("sha256:"):
+            raise RuntimeError(
+                f"[runner] docker_image_sha256 must start with 'sha256:' — got '{expected_sha[:32]}'"
+            )
+        # Validate hex portion (sha256: + 64 hex chars)
+        hex_part = expected_sha[len("sha256:"):]
+        if len(hex_part) != 64 or not all(c in "0123456789abcdef" for c in hex_part):
+            raise RuntimeError("[runner] docker_image_sha256 is not a valid SHA-256 hex digest")
+
+        # Use digest-pinned reference — Docker verifies content hash when pulling
+        image_ref = f"{self.manifest.docker_image}@{expected_sha}"
+        log.info(f"[runner] Pulling image {image_ref}")
+
+        result = subprocess.run(
+            ["docker", "pull", image_ref],
+            capture_output=True, text=True, timeout=600,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"[runner] Failed to pull image: {result.stderr[:300]}"
+            )
+
+        log.info(f"[runner] Image digest verified: {expected_sha[:16]}…")
+        return image_ref
+
     def _run_container(
         self,
         input_dir: Path,
         output_dir: Path,
         workdir: str,
+        image_ref: str,
     ) -> tuple[int, str]:
         """
         Launch the Docker container with full security hardening.
@@ -167,7 +207,7 @@ class JobRunner:
             "--volume", f"{output_dir}:/output:rw",         # Write-only outputs
             # Declared env vars only — never --env-file or host passthrough
             *self._build_env_args(),
-            self.manifest.docker_image,
+            image_ref,                                      # Digest-pinned image reference
             *self.manifest.command,
         ]
 
@@ -196,8 +236,19 @@ class JobRunner:
         for k, v in self.manifest.env.items():
             # Sanitize key — only allow alphanumeric + underscore
             clean_key = "".join(c for c in k if c.isalnum() or c == "_")
-            if clean_key and str(v):
-                args += ["--env", f"{clean_key}={v}"]
+            if not clean_key:
+                continue
+            # Sanitize value — strip null bytes, newlines, and carriage returns
+            # that could break Docker's env parsing or escape into log output.
+            # Cap at 4096 chars to prevent oversized env vars.
+            clean_val = (
+                str(v)
+                .replace("\x00", "")
+                .replace("\n", "")
+                .replace("\r", "")
+                [:4096]
+            )
+            args += ["--env", f"{clean_key}={clean_val}"]
         return args
 
     def _watchdog_loop(self):
