@@ -5,6 +5,10 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { DashboardStats } from '@/components/dashboard-stats'
 import { JobCard } from '@/components/job-card'
+import { PageHeader } from '@/components/ui/page-header'
+import { StatusBadge } from '@/components/ui/status-badge'
+import { InfoTooltip, Term } from '@/components/ui/info-tooltip'
+import { NoJobsEmpty } from '@/components/ui/empty-state'
 import { formatCurrency, formatRelativeTime } from '@/lib/formatters'
 import { TrendingDown, Zap, ExternalLink, Activity } from 'lucide-react'
 
@@ -67,22 +71,24 @@ export default async function DashboardPage() {
   const totalChambers  = chamberStates.length || 6
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-4xl font-bold mb-2">Dashboard</h1>
-          <p className="text-muted-foreground">Welcome back, {user.name || user.email}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-xs">
-            <Activity className="h-3 w-3 mr-1" />
-            {activeChambers}/{totalChambers} chambers active
-          </Badge>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/admin">Platform Status</Link>
-          </Button>
-        </div>
-      </div>
+    <div>
+      <PageHeader
+        title="Dashboard"
+        description={`Welcome back, ${user.name || user.email}`}
+        helpTopic="dashboard"
+        breadcrumbs={[{ label: 'Dashboard' }]}
+        actions={
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-xs hidden sm:flex items-center gap-1.5">
+              <span className={`w-1.5 h-1.5 rounded-full ${activeChambers > 0 ? 'bg-green-500 animate-pulse' : 'bg-slate-300'}`} />
+              <Term id="Chamber" className="text-xs font-normal" />: {activeChambers}/{totalChambers}
+            </Badge>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/admin">Platform Status</Link>
+            </Button>
+          </div>
+        }
+      />
 
       <div className="mb-8">
         <DashboardStats
@@ -100,9 +106,10 @@ export default async function DashboardPage() {
             <CardTitle className="flex items-center gap-2 text-green-900">
               <TrendingDown className="h-5 w-5" />
               Best Deal Right Now
+              <InfoTooltip term="Arbitrage" side="bottom" />
             </CardTitle>
             <CardDescription className="text-green-700">
-              From live ArbitrageSnapshot data
+              Live <Term id="Arbitrage" className="text-green-700 font-normal" /> data — updated on every calculation
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -180,12 +187,7 @@ export default async function DashboardPage() {
             {jobs.slice(0, 3).map(job => <JobCard key={job.id} job={job} />)}
           </div>
         ) : (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <p className="text-muted-foreground mb-4">No jobs yet. Create your first job!</p>
-              <Button asChild><Link href="/jobs">Create Job</Link></Button>
-            </CardContent>
-          </Card>
+          <NoJobsEmpty />
         )}
       </div>
 

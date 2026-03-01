@@ -10,6 +10,9 @@ import {
 } from '@/components/ui/select'
 import { ArbitrageTable } from '@/components/arbitrage-table'
 import { GPU_TYPES } from '@/lib/arbitrage'
+import { PageHeader } from '@/components/ui/page-header'
+import { InfoTooltip, Term } from '@/components/ui/info-tooltip'
+import { NoArbitrageResultsEmpty } from '@/components/ui/empty-state'
 import { Calculator, Info, Zap } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 
@@ -61,13 +64,13 @@ export default function ArbitragePage() {
   const results = response?.results ?? []
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-2">Cross-Cloud Arbitrage</h1>
-        <p className="text-muted-foreground">
-          Live price comparison across providers — every calculation trains the platform.
-        </p>
-      </div>
+    <div>
+      <PageHeader
+        title="Cross-Cloud Arbitrage"
+        description="Live price comparison across providers. Every calculation trains the Mist and Aetherion chambers."
+        helpTopic="arbitrage"
+        breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Arbitrage' }]}
+      />
 
       <div className="grid lg:grid-cols-3 gap-6 mb-8">
         {/* Calculator */}
@@ -170,15 +173,7 @@ export default function ArbitragePage() {
 
       {results.length > 0 && <ArbitrageTable results={results} />}
 
-      {!response && (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">
-              Configure your requirements above and click Calculate to see live price comparisons.
-            </p>
-          </CardContent>
-        </Card>
-      )}
+      {!response && <NoArbitrageResultsEmpty />}
     </div>
   )
 }

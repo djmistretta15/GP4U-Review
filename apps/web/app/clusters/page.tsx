@@ -2,6 +2,10 @@ import { prisma } from '@/lib/db'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ClusterBuilder } from '@/components/cluster-builder'
+import { PageHeader } from '@/components/ui/page-header'
+import { StatusBadge } from '@/components/ui/status-badge'
+import { InfoTooltip, Term } from '@/components/ui/info-tooltip'
+import { NoClustersEmpty } from '@/components/ui/empty-state'
 import { formatCurrency } from '@/lib/formatters'
 import { Layers, Server, Zap } from 'lucide-react'
 
@@ -84,14 +88,13 @@ export default async function ClustersPage() {
   const totalTflops          = clusters.reduce((s, c) => s + c.total_vram, 0) // vram as proxy metric
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-2">GPU Clusters</h1>
-        <p className="text-muted-foreground">
-          Reserve multi-GPU clusters for large model training and distributed inference.
-        </p>
-      </div>
+    <div>
+      <PageHeader
+        title="GPU Clusters"
+        description="Reserve multi-GPU clusters for large model training and distributed inference. Allocation is atomic — you get all GPUs or none."
+        helpTopic="clusters"
+        breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Clusters' }]}
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4 mb-8">
@@ -117,7 +120,7 @@ export default async function ClustersPage() {
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 mb-1">
               <Zap className="h-4 w-4 text-amber-600" />
-              <span className="text-sm text-muted-foreground">Total VRAM</span>
+              <span className="text-sm text-muted-foreground flex items-center gap-1">Total <Term id="VRAM" className="text-sm font-normal" /></span>
             </div>
             <div className="text-2xl font-bold">{totalTflops} GB</div>
           </CardContent>
@@ -130,14 +133,7 @@ export default async function ClustersPage() {
           <h2 className="text-xl font-semibold">Your Clusters</h2>
 
           {clusters.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <Server className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-40" />
-                <p className="text-muted-foreground mb-4">
-                  No clusters yet. Reserve a multi-GPU pool to get started.
-                </p>
-              </CardContent>
-            </Card>
+            <NoClustersEmpty />
           ) : (
             clusters.map(cluster => (
               <Card key={cluster.cluster_id}>
@@ -147,9 +143,7 @@ export default async function ClustersPage() {
                       <div className="flex items-center gap-2 mb-2">
                         <span className="font-semibold">{cluster.name}</span>
                         <Badge variant="outline" className="text-xs">{cluster.gpu_count}× GPU</Badge>
-                        <Badge className={`text-xs ${STATUS_COLOURS[cluster.status]}`}>
-                          {cluster.status}
-                        </Badge>
+                        <StatusBadge status={cluster.status} size="xs" />
                       </div>
                       <div className="grid grid-cols-4 gap-3 text-sm">
                         <div>

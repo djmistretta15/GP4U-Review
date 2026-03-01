@@ -3,6 +3,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { ChamberControlPanel } from '@/components/chamber-control-panel'
 import { LedgerExplorer } from '@/components/ledger-explorer'
+import { PageHeader } from '@/components/ui/page-header'
+import { StatusBadge } from '@/components/ui/status-badge'
+import { InfoTooltip, Term } from '@/components/ui/info-tooltip'
+import { NoLedgerEntriesEmpty } from '@/components/ui/empty-state'
 import {
   Activity, Database, Zap, Shield, GitBranch, Terminal,
 } from 'lucide-react'
@@ -43,17 +47,13 @@ export default async function AdminPage() {
   }).catch(() => [])
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <Terminal className="h-8 w-8 text-slate-700" />
-          <h1 className="text-4xl font-bold">Platform Admin</h1>
-        </div>
-        <p className="text-muted-foreground">
-          Chamber registry, Obsidian ledger, and platform diagnostics
-        </p>
-      </div>
+    <div>
+      <PageHeader
+        title="Platform Admin"
+        description="Chamber registry, Obsidian immutable ledger, and platform diagnostics. Requires clearance level 3."
+        helpTopic="admin"
+        breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Admin' }]}
+      />
 
       {/* Top stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -61,7 +61,7 @@ export default async function AdminPage() {
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 mb-1">
               <Activity className="h-4 w-4 text-green-600" />
-              <span className="text-sm text-muted-foreground">Active Chambers</span>
+              <span className="text-sm text-muted-foreground flex items-center gap-1">Active <Term id="Chamber" className="text-sm font-normal" />s</span>
             </div>
             <div className="text-3xl font-bold">{activeChambers}<span className="text-lg text-muted-foreground">/{totalChambers}</span></div>
           </CardContent>
@@ -71,7 +71,7 @@ export default async function AdminPage() {
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 mb-1">
               <Database className="h-4 w-4 text-blue-600" />
-              <span className="text-sm text-muted-foreground">Ledger Entries</span>
+              <span className="text-sm text-muted-foreground flex items-center gap-1"><Term id="ObsidianLedger" className="text-sm font-normal" /> Entries</span>
             </div>
             <div className="text-3xl font-bold">{ledgerCount.toLocaleString()}</div>
           </CardContent>
@@ -105,10 +105,11 @@ export default async function AdminPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Zap className="h-5 w-5 text-amber-500" />
-                Chamber Registry
+                <Term id="Chamber" /> Registry
+                <InfoTooltip term="ChamberMode" side="right" />
               </CardTitle>
               <CardDescription>
-                Live mode, event counts, and backtest scores for all docked chambers
+                Live mode, event counts, and <Term id="Backtest" className="text-slate-500 font-normal text-sm" /> scores for all docked chambers
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -124,7 +125,7 @@ export default async function AdminPage() {
                       className="flex items-center justify-between p-3 rounded-lg border bg-card"
                     >
                       <div className="flex items-center gap-3">
-                        <div className={`h-2.5 w-2.5 rounded-full ${HEALTH_COLOURS[c.mode === 'ACTIVE' ? 'HEALTHY' : c.mode === 'PASSIVE' ? 'DEGRADED' : 'OFFLINE']}`} />
+                          <StatusBadge status={c.mode} size="xs" showDot={true} label="" className="w-3 h-3 rounded-full p-0 border-0 bg-transparent" />
                         <div>
                           <div className="font-medium capitalize">{c.name}</div>
                           <div className="text-xs text-muted-foreground">
@@ -134,9 +135,7 @@ export default async function AdminPage() {
                           </div>
                         </div>
                       </div>
-                      <Badge className={`text-xs border ${MODE_COLOURS[c.mode] ?? MODE_COLOURS.OFFLINE}`}>
-                        {c.mode}
-                      </Badge>
+                      <StatusBadge status={c.mode} size="xs" />
                     </div>
                   ))}
                 </div>

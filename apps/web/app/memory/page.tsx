@@ -3,6 +3,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { StakeForm } from '@/components/stake-form'
+import { PageHeader } from '@/components/ui/page-header'
+import { StatusBadge } from '@/components/ui/status-badge'
+import { InfoTooltip, Term } from '@/components/ui/info-tooltip'
+import { NoStakesEmpty } from '@/components/ui/empty-state'
 import { formatCurrency } from '@/lib/formatters'
 import { Cpu, DollarSign, HardDrive, Layers } from 'lucide-react'
 
@@ -37,14 +41,13 @@ export default async function MemoryPage() {
   const totalAllocated  = activeStakes.reduce((s, m) => s + m.allocation_count, 0)
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-2">Memory Staking</h1>
-        <p className="text-muted-foreground">
-          Stake idle VRAM and RAM to earn passive yield. Powered by the Mnemo Chamber.
-        </p>
-      </div>
+    <div>
+      <PageHeader
+        title="Memory Staking"
+        description="Stake idle VRAM and RAM to earn passive yield. You set your own asking price."
+        helpTopic="memory"
+        breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Memory Staking' }]}
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -52,7 +55,7 @@ export default async function MemoryPage() {
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 mb-1">
               <HardDrive className="h-4 w-4 text-cyan-600" />
-              <span className="text-sm text-muted-foreground">VRAM Staked</span>
+              <span className="text-sm text-muted-foreground flex items-center gap-1"><Term id="VRAM" className="font-normal text-sm" /> Staked</span>
             </div>
             <div className="text-2xl font-bold">{totalVramStaked} GB</div>
           </CardContent>
@@ -94,14 +97,7 @@ export default async function MemoryPage() {
         <div className="lg:col-span-2 space-y-4">
           <h2 className="text-xl font-semibold">Your Stakes</h2>
           {stakes.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <HardDrive className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-40" />
-                <p className="text-muted-foreground mb-4">
-                  No stakes yet. Stake idle VRAM to start earning.
-                </p>
-              </CardContent>
-            </Card>
+            <NoStakesEmpty />
           ) : (
             stakes.map(stake => (
               <Card key={stake.id} className={!stake.is_active ? 'opacity-60' : ''}>
