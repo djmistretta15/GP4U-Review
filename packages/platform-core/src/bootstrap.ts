@@ -17,7 +17,7 @@
 
 import { PrismaClient } from '@prisma/client'
 import { getEventBus } from '@gp4u/event-bus'
-import { getChamberRegistry } from '@gp4u/chamber-registry'
+import { getChamberRegistry, ChamberThresholdWatcher } from '@gp4u/chamber-registry'
 import {
   PrismaSubjectStore,
   PrismaLedgerStore,
@@ -97,7 +97,15 @@ export async function bootstrapPlatform(): Promise<PlatformServices> {
   const docked = registry.getDockedChamberIds()
   console.log(`[platform] Chamber registry started — ${docked.length} chamber(s) docked: [${docked.join(', ')}]`)
 
-  // ── 5. Summary ───────────────────────────────────────────────────────────────
+  // ── 5. Threshold Watcher ─────────────────────────────────────────────────────
+  // Polls every 5 min; promotes chambers from PASSIVE → ACTIVE once they
+  // accumulate enough telemetry and pass their backtest.
+  const watcher = new ChamberThresholdWatcher(registry, {
+    poll_interval_ms: 5 * 60 * 1000,
+  })
+  watcher.start()
+  console.log('[platform] Chamber threshold watcher started')
+
   console.log('[platform] GP4U platform bootstrap complete')
   console.log(`[platform] Bus stats: ${JSON.stringify(bus.getStats())}`)
 

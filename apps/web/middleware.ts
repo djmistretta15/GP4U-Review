@@ -21,6 +21,7 @@ const OPEN_ROUTES = new Set([
   '/api/auth/register',
   '/api/auth/login',
   '/api/auth/refresh',
+  '/api/telemetry/russian-doll',  // Provider agents use their own job-scoped token
 ])
 
 export function middleware(request: NextRequest) {
