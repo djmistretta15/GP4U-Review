@@ -77,6 +77,13 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
 
   // ── Finance / Staking ──────────────────────────────────────────────────────
 
+  ComputeCredits: {
+    term:       'Compute Credits',
+    definition: 'The currency of GP4U. 1 credit = $1 USD. Credits are prepaid and used to pay for GPU-hours. Unused credits are refundable within 90 days. Your balance is derived from the Obsidian ledger — not a separate stored field.',
+    docPath:    '/help/billing',
+    category:   'finance',
+  },
+
   Stake: {
     term:       'Stake',
     definition: 'Something a provider puts at risk to guarantee their commitment. University providers stake their reputation — a public slash record damages their standing. Commercial providers stake cash (held in escrow). If they misbehave, they lose some or all of their stake.',
