@@ -309,6 +309,236 @@ model AuthEvent {
   @@index([timestamp])
 }
 
+// ─── Provider Nodes (onboarded hardware nodes) ───────────────────────────────
+
+enum ProviderTier {
+  UNIVERSITY    // .edu institution — reputational stake only
+  COMMERCIAL    // Commercial operator — cash/credit stake
+}
+
+enum NodeStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  EJECTED
+}
+
+model ProviderNode {
+  id                String       @id @default(cuid())
+  node_id           String       @unique  // matches agent.node_id
+  owner_user_id     String
+
+  // Tier & institution
+  tier              ProviderTier @default(COMMERCIAL)
+  institution_name  String?      // "MIT", "Stanford CS Dept", etc.
+  institution_email String?      // verified .edu email
+  mou_signed_at     DateTime?    // MOU timestamp for university tier
+
+  // Hardware fingerprint (collected by install.sh / provider agent)
+  gpu_count         Int          @default(0)
+  gpu_models        String       @default("[]")  // JSON array
+  total_vram_gb     Int          @default(0)
+  region            String?
+
+  // Visibility consent (the core T&C)
+  visibility_consent_at DateTime?  // timestamp of T&C acceptance
+  visibility_scope      String    @default("FULL")  // FULL | PARTIAL
+
+  // Status
+  status            NodeStatus   @default(PENDING_VERIFICATION)
+  suspended_reason  String?
+  trust_score       Float        @default(0)
+  uptime_pct_30d    Float?
+  last_heartbeat_at DateTime?
+
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  stakes            ProviderStake[]
+  slash_events      SlashEvent[]
+
+  @@index([owner_user_id])
+  @@index([tier])
+  @@index([status])
+  @@index([node_id])
+}
+
+// ─── Mnemo: Stake Engine ──────────────────────────────────────────────────────
+
+enum StakeStatus {
+  ACTIVE
+  PARTIALLY_SLASHED
+  FULLY_SLASHED
+  RELEASED
+  LOCKED_APPEAL   // frozen while appeal is open
+}
+
+model ProviderStake {
+  id               String      @id @default(cuid())
+  node_id          String
+  tier             ProviderTier
+
+  // Amounts (in GP4U credits, USD-pegged 1:1 at launch)
+  initial_amount   Decimal     @db.Decimal(12, 4)
+  current_amount   Decimal     @db.Decimal(12, 4)
+  total_slashed    Decimal     @default(0) @db.Decimal(12, 4)
+
+  status           StakeStatus @default(ACTIVE)
+  released_at      DateTime?
+
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  node             ProviderNode  @relation(fields: [node_id], references: [node_id], onDelete: Cascade)
+  slash_events     SlashEvent[]
+
+  @@index([node_id])
+  @@index([status])
+}
+
+// ─── Mnemo: Slash Events ──────────────────────────────────────────────────────
+
+enum SlashSeverity {
+  WARNING       // logged, no deduction
+  SOFT_SLASH    // 10–20% deduction
+  HARD_SLASH    // 50–100% deduction + ejection
+}
+
+enum SlashCondition {
+  // Tier 1 — Warnings
+  THERMAL_THROTTLE_EVENT
+  UPTIME_DROP_MINOR
+  TELEMETRY_DELAY
+
+  // Tier 2 — Soft Slash
+  VRAM_OVERCLAIM
+  JOB_DROPPED_UNEXPECTEDLY
+  UPTIME_SLA_BREACH
+  HARDWARE_MISREPRESENTATION
+  REPEATED_WARNING
+
+  // Tier 3 — Hard Slash
+  TELEMETRY_TAMPERING
+  VISIBILITY_BLOCKED        // violated the core T&C
+  UNAUTHORIZED_PROCESS
+  CRYPTO_MINING_DURING_ML_JOB
+  REPEATED_SOFT_SLASH
+}
+
+model SlashEvent {
+  id               String        @id @default(cuid())
+  slash_id         String        @unique @default(cuid())
+  node_id          String
+  stake_id         String?
+
+  condition        SlashCondition
+  severity         SlashSeverity
+  description      String
+
+  // Evidence — the raw telemetry/proof is hashed, not stored
+  evidence_hash    String        // SHA-256 of raw evidence payload
+  evidence_summary String        // human-readable summary for appeals
+  ledger_entry_id  String?       // block index in Obsidian ledger
+
+  // Financial impact
+  slash_amount     Decimal       @default(0) @db.Decimal(12, 4)
+  pct_of_stake     Decimal       @default(0) @db.Decimal(5, 2)
+
+  // Appeal window
+  appeal_deadline  DateTime      // slash_at + 7 days
+  appealed         Boolean       @default(false)
+
+  // Who issued the slash
+  issued_by        String        // admin user_id or "SYSTEM"
+
+  created_at       DateTime      @default(now())
+
+  node             ProviderNode  @relation(fields: [node_id], references: [node_id], onDelete: Cascade)
+  stake            ProviderStake? @relation(fields: [stake_id], references: [id])
+  appeal           AppealRecord?
+
+  @@index([node_id])
+  @@index([condition])
+  @@index([severity])
+  @@index([created_at])
+}
+
+// ─── Mnemo: Appeal Records ────────────────────────────────────────────────────
+
+enum AppealStatus {
+  PENDING
+  UNDER_REVIEW
+  ACCEPTED      // slash reversed, stake restored
+  REJECTED      // slash upheld
+  EXPIRED       // appeal window passed without filing
+}
+
+model AppealRecord {
+  id              String       @id @default(cuid())
+  appeal_id       String       @unique @default(cuid())
+  slash_event_id  String       @unique
+
+  filed_by        String       // node owner user_id
+  statement       String       // provider's written appeal
+  evidence_urls   String       @default("[]")  // JSON array of supporting URLs
+
+  status          AppealStatus @default(PENDING)
+  reviewed_by     String?
+  resolution_note String?
+  amount_restored Decimal?     @db.Decimal(12, 4)
+
+  filed_at        DateTime     @default(now())
+  resolved_at     DateTime?
+
+  slash_event     SlashEvent   @relation(fields: [slash_event_id], references: [id], onDelete: Cascade)
+
+  @@index([slash_event_id])
+  @@index([status])
+  @@index([filed_by])
+}
+
+// ─── ZK Attestation: Proof Registry ──────────────────────────────────────────
+
+enum ProofType {
+  HARDWARE_ATTESTATION   // proves job ran on declared hardware
+  ENERGY_ATTESTATION     // proves energy consumption for carbon credits
+  UPTIME_ATTESTATION     // proves uptime record without revealing customers
+}
+
+enum ProofStatus {
+  PENDING_VERIFICATION
+  VERIFIED
+  INVALID
+  EXPIRED
+}
+
+model ZKProof {
+  id              String      @id @default(cuid())
+  proof_id        String      @unique @default(cuid())
+  node_id         String
+  job_id          String?     // null for uptime/energy proofs
+
+  proof_type      ProofType
+  status          ProofStatus @default(PENDING_VERIFICATION)
+
+  // The proof itself (serialized; RISC Zero receipt or similar)
+  proof_data      String      // base64-encoded proof bytes
+  public_inputs   Json        // what the verifier sees: gpu_model, vram_gb, duration_s, etc.
+  verification_key String     // identifies the circuit version
+
+  // Timestamps
+  generated_at    DateTime
+  verified_at     DateTime?
+  expires_at      DateTime    // proofs expire after 90 days
+
+  created_at      DateTime    @default(now())
+
+  @@index([node_id])
+  @@index([job_id])
+  @@index([proof_type])
+  @@index([status])
+}
+
 // ─── Chamber Registry State ───────────────────────────────────────────────────
 
 model ChamberState {
