@@ -1,0 +1,29 @@
+{
+  "name": "@gp4u/cli",
+  "version": "0.1.0",
+  "description": "GP4U Customer CLI — submit jobs, monitor status, download results",
+  "private": true,
+  "bin": {
+    "gp4u": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev":   "ts-node src/cli.ts"
+  },
+  "dependencies": {
+    "axios":       "^1.6.0",
+    "chalk":       "^5.3.0",
+    "commander":   "^12.0.0",
+    "ora":         "^8.0.1",
+    "inquirer":    "^9.2.0",
+    "conf":        "^13.0.0",
+    "ws":          "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/node":     "^20.0.0",
+    "@types/ws":       "^8.5.10",
+    "@types/inquirer": "^9.0.7",
+    "typescript":      "^5.0.0",
+    "ts-node":         "^10.9.0"
+  }
+}
