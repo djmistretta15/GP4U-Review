@@ -1,26 +1,30 @@
 /**
  * POST /api/auth/register — Customer Registration
  *
- * Creates a new user account. In production this would:
- *   1. Hash the password (bcrypt/argon2)
- *   2. Send email verification
- *   3. Issue a short-lived session token
- *
- * At this stage: creates the user record, issues a dev-mode session.
- * Plug in your auth provider (NextAuth, Clerk, Auth0) here — the user model
- * is already fully defined in Prisma.
+ * Creates a new user account:
+ *   1. Validates input
+ *   2. Hashes password with bcrypt (cost factor 12)
+ *   3. Creates user record with email_verified = false
+ *   4. Sends email verification via Resend
+ *   5. Logs auth event to Obsidian
  *
  * Rate limit: 5 registrations per hour per IP (prevents mass account creation).
  * Email uniqueness enforced at DB level + checked here for clean error messages.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db'
-import { rateLimit, clientIp } from '@/lib/auth-guard'
+import { rateLimit } from '@/lib/rate-limit'
+import { clientIp } from '@/lib/auth-guard'
+import { generateVerificationToken } from '@/lib/tokens'
+import { sendVerificationEmail } from '@/lib/email'
 
 export async function POST(req: NextRequest) {
+  const ip = clientIp(req)
+
   // Rate limit: 5 attempts per hour per IP
-  const rl = rateLimit(clientIp(req), 5, 3600)
+  const rl = await rateLimit(`register:ip:${ip}`, 5, 3600)
   if (!rl.allowed) {
     return NextResponse.json(
       { error: 'Too many registration attempts. Please wait before trying again.' },
@@ -66,28 +70,44 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  // ── Hash password + generate verification token ───────────────────────────
+
+  const [password_hash, verification_token] = await Promise.all([
+    bcrypt.hash(password, 12),
+    Promise.resolve(generateVerificationToken()),
+  ])
+
   // ── Create user ───────────────────────────────────────────────────────────
-  // NOTE: In production, hash the password with bcrypt/argon2 before storing.
-  // This scaffold stores a placeholder — integrate your auth provider here.
 
   const user = await prisma.user.create({
     data: {
-      email:             sanitizedEmail,
-      name:              sanitizedName,
-      clearance_level:   0,   // EMAIL_ONLY — upgrades on verification
-      trust_score:       0,
-      identity_provider: 'EMAIL_PASSWORD',
-      // referral: refCode stored via separate referral table (future)
+      email:              sanitizedEmail,
+      name:               sanitizedName,
+      password_hash,
+      verification_token,
+      email_verified:     false,
+      clearance_level:    0,   // EMAIL_ONLY — upgrades to 1 after verification
+      trust_score:        0,
+      identity_provider:  'EMAIL_PASSWORD',
     },
   })
+
+  // ── Send verification email ───────────────────────────────────────────────
+  // Non-fatal: if email fails, user can request a new one later
+
+  await sendVerificationEmail({
+    to:    user.email,
+    name:  user.name ?? user.email,
+    token: verification_token,
+  }).catch(err => console.error('[register] Email send failed:', err))
 
   // ── Log auth event ────────────────────────────────────────────────────────
 
   await prisma.authEvent.create({
     data: {
-      user_id:    user.id,
+      subject_id: user.id,
       event_type: 'REGISTER',
-      ip_address: clientIp(req),
+      ip_address: ip,
       user_agent: req.headers.get('user-agent') ?? 'unknown',
       success:    true,
     },
@@ -95,12 +115,12 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json(
     {
-      user_id:    user.id,
-      email:      user.email,
-      name:       user.name,
+      user_id:     user.id,
+      email:       user.email,
+      name:        user.name,
       ref_applied: !!refCode,
-      next_step:  '/onboarding',
-      message:    'Account created. Redirecting to onboarding.',
+      next_step:   '/login',
+      message:     'Account created. Check your email to verify your address before logging in.',
     },
     { status: 201 }
   )

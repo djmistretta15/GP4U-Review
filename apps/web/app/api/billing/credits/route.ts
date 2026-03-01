@@ -87,48 +87,52 @@ export async function GET(req: NextRequest) {
   })
 }
 
-// ─── POST: Add credits ─────────────────────────────────────────────────────────
+// ─── POST: Add credits (internal — called by webhook or admin only) ────────────
+//
+// SECURITY: This endpoint is intentionally restricted.
+// Direct calls with unverified payment IDs are REJECTED.
+// Credits are applied by the Stripe webhook (/api/billing/webhook) only.
+// Admin-initiated manual credits require an explicit admin_override flag + clearance 3.
 
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth(req)
+  const auth = await requireAuth(req, { min_clearance: 3 })
   if (!auth.ok) return auth.response
 
-  const { user } = auth
-
-  // Rate limit: 10 additions per hour per user (anti-fraud / Stripe webhook replay guard)
-  const allowed = rateLimit(`credits:${user.id}`, 10, 3600)
-  if (!allowed) {
-    return NextResponse.json(
-      { error: 'Too many credit requests. Please wait before adding more credits.' },
-      { status: 429 }
-    )
-  }
+  const { user: admin } = auth
 
   let body: unknown
   try { body = await req.json() } catch {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const { amount, stripe_payment_intent_id } = body as {
-    amount?:                    unknown
-    stripe_payment_intent_id?:  unknown
+  const { target_user_id, amount, admin_override } = body as {
+    target_user_id?:  unknown
+    amount?:          unknown
+    admin_override?:  unknown
   }
 
-  if (typeof amount !== 'number' || !isFinite(amount) || amount < 10 || amount > 10000) {
+  if (admin_override !== true) {
     return NextResponse.json(
-      { error: 'Amount must be between $10 and $10,000' },
-      { status: 400 }
+      { error: 'Credits must be added via Stripe payment. Use POST /api/billing/checkout then complete payment.' },
+      { status: 403 }
     )
   }
 
-  // In production: verify Stripe payment intent is succeeded before crediting.
-  // Here we record the intent ID for auditability (Obsidian seals it).
-  const paymentRef = typeof stripe_payment_intent_id === 'string'
-    ? stripe_payment_intent_id.slice(0, 128)
-    : `manual-${Date.now()}`
+  if (typeof target_user_id !== 'string' || !target_user_id) {
+    return NextResponse.json({ error: 'target_user_id required' }, { status: 400 })
+  }
+
+  if (typeof amount !== 'number' || !isFinite(amount) || amount < 1 || amount > 100000) {
+    return NextResponse.json({ error: 'Amount must be between $1 and $100,000' }, { status: 400 })
+  }
+
+  const targetUser = await prisma.user.findUnique({ where: { id: target_user_id } })
+  if (!targetUser) {
+    return NextResponse.json({ error: 'Target user not found' }, { status: 404 })
+  }
 
   // ── Record in Obsidian ledger ─────────────────────────────────────────────
-  // Block index: last block + 1 (in production this is atomic + hash-chained)
+
   const lastEntry = await prisma.ledgerEntry.findFirst({
     orderBy: { block_index: 'desc' },
     select:  { block_index: true, block_hash: true },
@@ -136,13 +140,15 @@ export async function POST(req: NextRequest) {
 
   const blockIndex = (lastEntry?.block_index ?? 0) + 1
   const prevHash   = lastEntry?.block_hash ?? '0'.repeat(64)
-  const entryId    = `CREDITS-${user.id.slice(-8)}-${blockIndex}`
+  const entryId    = `CREDITS-ADMIN-${target_user_id.slice(-8)}-${blockIndex}`
+  const paymentRef = `admin:${admin.id}:${Date.now()}`
 
   const payload = JSON.stringify({
-    user_id:    user.id,
+    user_id:     target_user_id,
     amount,
     payment_ref: paymentRef,
-    timestamp:  new Date().toISOString(),
+    issued_by:   admin.id,
+    timestamp:   new Date().toISOString(),
   })
 
   const payloadHash  = crypto.createHash('sha256').update(payload).digest('hex')
@@ -151,27 +157,27 @@ export async function POST(req: NextRequest) {
 
   const entry = await prisma.ledgerEntry.create({
     data: {
-      entry_id:    entryId,
-      block_index: blockIndex,
-      event_type:  'CREDITS_ADDED',
-      severity:    'INFO',
-      subject_id:  user.id,
-      metadata:    { amount, payment_ref: paymentRef },
-      timestamp:   new Date(),
-      sequence:    blockIndex,
-      prev_hash:   prevHash,
+      entry_id:     entryId,
+      block_index:  blockIndex,
+      event_type:   'CREDITS_ADDED',
+      severity:     'INFO',
+      subject_id:   target_user_id,
+      metadata:     { amount, payment_ref: paymentRef, source: 'admin_override', issued_by: admin.id },
+      timestamp:    new Date(),
+      sequence:     blockIndex,
+      prev_hash:    prevHash,
       payload_hash: payloadHash,
-      block_hash:  blockHash,
+      block_hash:   blockHash,
     },
   })
 
   return NextResponse.json(
     {
-      success:       true,
-      amount_added:  amount,
-      ledger_entry:  entry.entry_id,
-      block_index:   entry.block_index,
-      message:       `$${amount} in compute credits added. Sealed in Obsidian ledger block #${blockIndex}.`,
+      success:      true,
+      amount_added: amount,
+      ledger_entry: entry.entry_id,
+      block_index:  entry.block_index,
+      issued_by:    admin.id,
     },
     { status: 201 }
   )

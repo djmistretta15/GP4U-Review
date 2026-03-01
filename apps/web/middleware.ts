@@ -24,6 +24,8 @@ const OPEN_ROUTES = new Set([
   '/api/auth/register',
   '/api/auth/login',
   '/api/auth/refresh',
+  '/api/auth/verify-email',
+  '/api/billing/webhook',
 ])
 
 const PROVIDER_TOKEN_ROUTES = new Set(['/api/telemetry/russian-doll'])

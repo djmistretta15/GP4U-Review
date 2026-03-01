@@ -72,9 +72,15 @@ enum ChamberMode {
 // ─── Core: Users (extended with Custodes fields) ──────────────────────────────
 
 model User {
-  id                String         @id @default(cuid())
+  id                String         @id @default(uuid())
   email             String         @unique
   name              String?
+
+  // Credentials (EMAIL_PASSWORD flow)
+  password_hash     String?        // bcrypt hash — null for OAuth/SSO users
+  email_verified    Boolean        @default(false)
+  verification_token String?       @unique  // cleared after verification
+  refresh_token     String?        @unique  // rotated on every refresh
 
   // Custodes Dextera fields
   subject_type      SubjectType    @default(HUMAN)
@@ -95,6 +101,8 @@ model User {
 
   @@index([email])
   @@index([institution_id])
+  @@index([verification_token])
+  @@index([refresh_token])
 }
 
 // ─── Core: GPUs (extended with Atlas + health fields) ─────────────────────────
@@ -299,6 +307,8 @@ model AuthEvent {
   subject_id  String
   passport_id String?
   ip_address  String?
+  user_agent  String?
+  success     Boolean  @default(true)
   metadata    Json?
   timestamp   DateTime @default(now())
 

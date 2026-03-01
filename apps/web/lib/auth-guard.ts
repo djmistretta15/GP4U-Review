@@ -120,31 +120,11 @@ function resolveSubjectId(req: NextRequest): string | null {
   return subject_id
 }
 
-// ─── Rate limiter (in-memory, per-IP, no external dependency) ─────────────────
-// Production upgrade: replace with Redis sliding window via Upstash.
+// ─── Rate limiter — delegates to lib/rate-limit (Redis + in-memory fallback) ──
+// Import the async version from lib/rate-limit for new code.
+// This sync shim is kept for call sites that haven't been migrated yet.
 
-const _rl_map = new Map<string, { count: number; reset_at: number }>()
-
-/**
- * Simple token-bucket rate limiter. Returns true if the request should be allowed.
- *
- * @param key      Identifier (IP address or subject_id)
- * @param limit    Max requests per window
- * @param window_s Window size in seconds
- */
-export function rateLimit(key: string, limit = 60, window_s = 60): boolean {
-  const now    = Date.now()
-  const entry  = _rl_map.get(key)
-
-  if (!entry || now > entry.reset_at) {
-    _rl_map.set(key, { count: 1, reset_at: now + window_s * 1000 })
-    return true
-  }
-
-  if (entry.count >= limit) return false
-  entry.count++
-  return true
-}
+export { rateLimit } from '@/lib/rate-limit'
 
 /** Returns the client IP from the request, falling back to 'unknown'. */
 export function clientIp(req: NextRequest): string {
