@@ -1,0 +1,330 @@
+// GP4U Platform — Complete Prisma Schema
+// Includes all Custodes fields, Obsidian ledger, and chamber support.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Provider {
+  AWS
+  GCP
+  AZURE
+  LAMBDA
+  RUNPOD
+  OTHER
+}
+
+enum GPUStatus {
+  AVAILABLE
+  BUSY
+  LIMITED
+  OFFLINE
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  COMPLETE
+  FAILED
+}
+
+enum SupplyTier {
+  BACKBONE
+  CAMPUS
+  EDGE
+}
+
+enum SubjectType {
+  HUMAN
+  AGENT
+  INSTITUTION
+  SERVICE
+}
+
+enum ClearanceLevel {
+  EMAIL_ONLY    // 0
+  INSTITUTIONAL // 1
+  ENTERPRISE    // 2
+  ADMIN         // 3
+}
+
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+enum ChamberMode {
+  PASSIVE
+  BACKTEST
+  ACTIVE
+  OFFLINE
+}
+
+// ─── Core: Users (extended with Custodes fields) ──────────────────────────────
+
+model User {
+  id                String         @id @default(cuid())
+  email             String         @unique
+  name              String?
+
+  // Custodes Dextera fields
+  subject_type      SubjectType    @default(HUMAN)
+  clearance_level   Int            @default(0)
+  trust_score       Float          @default(0)
+  is_banned         Boolean        @default(false)
+  ban_reason        String?
+  identity_provider String         @default("EMAIL_PASSWORD")
+  institution_id    String?
+  org_id            String?
+
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  jobs              Job[]
+  auth_events       AuthEvent[]
+  memory_stakes     MemoryStake[]
+
+  @@index([email])
+  @@index([institution_id])
+}
+
+// ─── Core: GPUs (extended with Atlas + health fields) ─────────────────────────
+
+model GPU {
+  id                     String     @id @default(cuid())
+  name                   String
+  provider               Provider
+  vramGB                 Int
+  pricePerHour           Decimal    @db.Decimal(10, 4)
+  region                 String
+  status                 GPUStatus  @default(AVAILABLE)
+
+  // Atlas fields
+  supply_tier            SupplyTier @default(EDGE)
+  node_id                String?
+  vram_available_gb      Int?
+  trust_score            Float      @default(0)
+  veritas_verified       Boolean    @default(false)
+  benchmark_score        Int?
+  allowed_workload_types String     @default("TRAINING,INFERENCE")
+  price_mode             String     @default("FIXED")
+  power_cap_watts        Int?
+
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+
+  health                 GPUHealth?
+  jobs                   Job[]
+  memory_stakes          MemoryStake[]
+
+  @@index([provider])
+  @@index([region])
+  @@index([supply_tier])
+  @@index([status])
+}
+
+model GPUHealth {
+  id                String   @id @default(cuid())
+  gpuId             String   @unique
+  thermalScore      Int
+  memoryScore       Int
+  uptimeHours       Int
+  lastMaintenanceAt DateTime
+  pastUsageTags     String
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  gpu               GPU      @relation(fields: [gpuId], references: [id], onDelete: Cascade)
+}
+
+// ─── Core: Jobs (extended with Atlas allocation + Russian-Doll fields) ────────
+
+model Job {
+  id                    String    @id @default(cuid())
+  userId                String
+  gpuId                 String
+  name                  String
+  status                JobStatus @default(PENDING)
+  expectedDurationHours Decimal   @db.Decimal(10, 2)
+  costEstimate          Decimal   @db.Decimal(10, 2)
+  scriptPath            String?
+
+  // Atlas allocation fields
+  allocation_id         String?
+  supply_tier           String?
+  routing_score         Float?
+  actual_cost           Decimal?  @db.Decimal(10, 4)
+  workload_type         String    @default("TRAINING")
+
+  // Russian-Doll telemetry
+  energy_kwh            Float?
+  carbon_kg_co2e        Float?
+  virtual_transistors   BigInt?
+  energy_per_op_fj      Float?
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gpu                   GPU       @relation(fields: [gpuId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([gpuId])
+  @@index([status])
+  @@index([allocation_id])
+}
+
+// ─── Arbitrage Snapshots ──────────────────────────────────────────────────────
+
+model ArbitrageSnapshot {
+  id            String   @id @default(cuid())
+  gpuType       String
+  numGpus       Int
+  durationHours Decimal  @db.Decimal(10, 2)
+  provider      Provider
+  pricePerHour  Decimal  @db.Decimal(10, 4)
+  totalCost     Decimal  @db.Decimal(10, 2)
+  createdAt     DateTime @default(now())
+
+  @@index([gpuType])
+  @@index([provider])
+  @@index([createdAt])
+}
+
+// ─── Memory Staking (Mnemo Chamber) ──────────────────────────────────────────
+
+model MemoryStake {
+  id                    String   @id @default(cuid())
+  userId                String
+  gpuId                 String
+  vram_gb               Int
+  ram_gb                Int
+  asking_price_per_gb_sec Decimal @db.Decimal(18, 10)
+  idle_schedule         String?  // JSON cron expression
+  is_active             Boolean  @default(true)
+  total_earned_usd      Decimal  @default(0) @db.Decimal(10, 4)
+  allocation_count      Int      @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gpu                   GPU      @relation(fields: [gpuId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([gpuId])
+  @@index([is_active])
+}
+
+// ─── Obsidian: Immutable Ledger ───────────────────────────────────────────────
+
+model LedgerEntry {
+  id              String   @id @default(cuid())
+  entry_id        String   @unique
+  block_index     Int      @unique
+  event_type      String
+  severity        String   @default("INFO")
+  subject_id      String?
+  passport_id     String?
+  institution_id  String?
+  target_id       String?
+  target_type     String?
+  metadata        Json?
+  ip_address_hash String?
+  region          String?
+  timestamp       DateTime
+  sequence        Int
+  prev_hash       String
+  payload_hash    String
+  block_hash      String
+  merkle_root     String?
+  created_at      DateTime @default(now())
+
+  @@index([event_type])
+  @@index([subject_id])
+  @@index([target_id])
+  @@index([block_index])
+  @@index([timestamp])
+}
+
+model MerkleBlock {
+  id           String   @id @default(cuid())
+  block_number Int      @unique
+  merkle_root  String
+  entry_count  Int
+  first_index  Int
+  last_index   Int
+  sealed_at    DateTime
+  signature    String
+  sealed_by    String
+
+  @@index([block_number])
+}
+
+model Dispute {
+  id                 String        @id @default(cuid())
+  dispute_id         String        @unique
+  job_id             String
+  opened_by          String
+  against            String
+  reason             String
+  status             DisputeStatus @default(OPEN)
+  outcome            String?
+  resolved_by        String?
+  resolution_notes   String?
+  refund_amount      Decimal?      @db.Decimal(10, 2)
+  evidence_entry_ids Json          @default("[]")
+  opened_at          DateTime      @default(now())
+  resolved_at        DateTime?
+
+  @@index([job_id])
+  @@index([status])
+  @@index([opened_by])
+}
+
+// ─── Dextera: Auth Events ─────────────────────────────────────────────────────
+
+model AuthEvent {
+  id          String   @id @default(cuid())
+  event_type  String
+  subject_id  String
+  passport_id String?
+  ip_address  String?
+  metadata    Json?
+  timestamp   DateTime @default(now())
+
+  user        User     @relation(fields: [subject_id], references: [id], onDelete: Cascade)
+
+  @@index([subject_id])
+  @@index([event_type])
+  @@index([timestamp])
+}
+
+// ─── Chamber Registry State ───────────────────────────────────────────────────
+
+model ChamberState {
+  id                    String      @id @default(cuid())
+  chamber_id            String      @unique
+  name                  String
+  mode                  ChamberMode @default(PASSIVE)
+  events_received       Int         @default(0)
+  backtest_score        Float?
+  backtest_improvement  Float?
+  activated_at          DateTime?
+  last_event_at         DateTime?
+  last_backtest_at      DateTime?
+  error                 String?
+  updatedAt             DateTime    @updatedAt
+
+  @@index([chamber_id])
+  @@index([mode])
+}
