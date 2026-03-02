@@ -23,6 +23,8 @@ import './globals.css'
 import { GlobalSearch } from '@/components/ui/global-search'
 import { WorkloadAdvisor } from '@/components/workload-advisor'
 import { RootErrorBoundary } from '@/components/error-boundary'
+import { AuthProvider } from '@/components/auth-provider'
+import { UserMenu } from '@/components/user-menu'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -50,6 +52,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="h-full">
       <body className={`${inter.className} h-full bg-slate-50 text-slate-900 antialiased`}>
         <RootErrorBoundary>
+        <AuthProvider>
         <div className="flex h-full">
 
           {/* ── Sidebar ────────────────────────────────────────────────────── */}
@@ -124,7 +127,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <div className="hidden sm:flex items-center gap-3 ml-auto flex-shrink-0">
                 <TrustPill />
                 <div className="h-5 border-r border-slate-200" />
-                <UserMenuPlaceholder />
+                <UserMenu />
               </div>
 
             </header>
@@ -160,6 +163,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Workload Advisor — always available */}
         <WorkloadAdvisor />
 
+        </AuthProvider>
         </RootErrorBoundary>
       </body>
     </html>
@@ -205,20 +209,6 @@ function TrustPill() {
       <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
       Platform Live
     </Link>
-  )
-}
-
-function UserMenuPlaceholder() {
-  return (
-    <div
-      className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 border border-slate-200 bg-slate-50 cursor-pointer hover:bg-white transition-colors"
-      title="Account menu"
-    >
-      <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
-        <span className="text-white text-[9px] font-bold">D</span>
-      </div>
-      <span className="text-xs font-medium text-slate-700 max-w-[80px] truncate">demo@gp4u.com</span>
-    </div>
   )
 }
 

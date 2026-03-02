@@ -14,12 +14,15 @@
 import { useState, FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useAuth } from '@/components/auth-provider'
 
 export default function LoginPage() {
   const router       = useRouter()
   const searchParams = useSearchParams()
   const redirectTo   = searchParams.get('next') ?? '/dashboard'
   const justVerified = searchParams.get('verified') === '1'
+
+  const { login } = useAuth()
 
   const [form, setForm] = useState({ email: '', password: '' })
   const [loading, setLoading] = useState(false)
@@ -36,26 +39,12 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const res = await fetch('/api/auth/login', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ email: form.email, password: form.password }),
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        setError(data.error ?? 'Login failed. Please try again.')
+      const result = await login(form.email, form.password)
+      if (result.error) {
+        setError(result.error)
         return
       }
-
-      // Store access token in sessionStorage (cleared on tab close)
-      // The refresh token lives in an HttpOnly cookie (set by the server)
-      sessionStorage.setItem('gp4u_access_token', data.access_token)
-
       router.push(redirectTo)
-    } catch {
-      setError('Network error. Please check your connection and try again.')
     } finally {
       setLoading(false)
     }

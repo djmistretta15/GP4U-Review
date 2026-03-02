@@ -82,6 +82,10 @@ model User {
   verification_token String?       @unique  // cleared after verification
   refresh_token     String?        @unique  // rotated on every refresh
 
+  // Password reset (time-limited one-time token)
+  password_reset_token      String?   @unique
+  password_reset_expires_at DateTime?
+
   // Custodes Dextera fields
   subject_type      SubjectType    @default(HUMAN)
   clearance_level   Int            @default(0)

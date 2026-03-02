@@ -23,8 +23,11 @@ const OPEN_ROUTES = new Set([
   '/api/health/public',
   '/api/auth/register',
   '/api/auth/login',
+  '/api/auth/logout',
   '/api/auth/refresh',
   '/api/auth/verify-email',
+  '/api/auth/forgot-password',
+  '/api/auth/reset-password',
   '/api/billing/webhook',
 ])
 

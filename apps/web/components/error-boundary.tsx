@@ -36,9 +36,10 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    // Log to console (replace with Sentry.captureException in production)
     console.error('[ErrorBoundary] Uncaught error:', error, info.componentStack)
     this.props.onError?.(error, info)
+    // Send to Sentry if configured (dynamic import — doesn't block render)
+    import('@/lib/monitoring').then(m => m.captureClientError(error, 'ErrorBoundary')).catch(() => {})
   }
 
   render() {

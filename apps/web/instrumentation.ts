@@ -9,8 +9,13 @@
  */
 
 export async function register() {
-  // Only run on the Node.js server — not in edge runtime or client
   if (process.env.NEXT_RUNTIME === 'nodejs') {
+    // Sentry — error monitoring (no-op if SENTRY_DSN is not set)
+    if (process.env.SENTRY_DSN) {
+      await import('./sentry.server.config')
+    }
+
+    // GP4U platform bootstrap — DB adapters, event bus, Obsidian, chambers
     const { bootstrapPlatform } = await import('@gp4u/platform-core')
     await bootstrapPlatform()
   }

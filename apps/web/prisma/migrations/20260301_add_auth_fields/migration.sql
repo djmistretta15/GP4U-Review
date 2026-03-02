@@ -18,6 +18,11 @@ ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "refresh_token" TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS "User_refresh_token_key" ON "User"("refresh_token");
 CREATE INDEX IF NOT EXISTS "User_refresh_token_idx" ON "User"("refresh_token");
 
+-- Password reset token
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "password_reset_token"      TEXT;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "password_reset_expires_at" TIMESTAMPTZ;
+CREATE UNIQUE INDEX IF NOT EXISTS "User_password_reset_token_key" ON "User"("password_reset_token");
+
 -- ─── AuthEvent: additional fields ────────────────────────────────────────────
 
 ALTER TABLE "AuthEvent" ADD COLUMN IF NOT EXISTS "user_agent" TEXT;
